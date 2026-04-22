@@ -338,7 +338,7 @@ def main():
         with st.expander("点击展开参数调节面板"):
             col_a, col_b, col_c = st.columns(3)
             with col_a:
-                n_estimators = st.slider("随机森林树数量", 50, 500, 200, step=50)
+                n_estimators = st.slider("随机森林树数量", 50, 100, 200, step=50)
                 max_depth = st.slider("最大深度", 3, 30, 10)
             with col_b:
                 fp_nbits = st.slider("指纹位数", 512, 4096, 2048, step=512)

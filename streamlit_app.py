@@ -350,10 +350,8 @@ def main():
             use_grid_search = st.checkbox("使用网格搜索优化超参数（耗时较长）")
         
         # 负样本平衡比例
-        ratio = st.slider("正负样本比例 (1 : N)", 5, 30, 20, help="例如 1:20 表示负样本是正样本的 20 倍")
+        ratio = st.slider("正负样本比例 (1 : N)", 1, 10, 5, help="例如 1:5 表示负样本是正样本的 5 倍")
         effective_ratio = min(ratio, 5)
-        if effective_ratio != ratio:
-            st.info(f"由于内存限制，实际负样本比例将被限制为 1:{effective_ratio}")
         
         if st.button("开始训练模型"):
             pos = df[df['label']==1]['smiles'].tolist()

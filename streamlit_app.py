@@ -136,8 +136,23 @@ def display_molecule_3d(smiles, height=400, width=400, style='stick'):
     if mol is None:
         st.error("无效 SMILES")
         return
+    try:
+        Chem.SanitizeMol(mol)
+    except:
+        st.warning("分子消毒失败，可能含有不合理价键，3D 结构无法生成")
+        img = Draw.MolToImage(mol, size=(300,300))
+        st.image(img, caption="2D 结构")
+        return
     mol_3d = Chem.AddHs(mol)
-    if AllChem.EmbedMolecule(mol_3d, AllChem.ETKDG()) == 0:
+    params = AllChem.ETKDG()
+    params.maxAttempts = 500
+    params.randomSeed = 42
+    try:
+        if AllChem.EmbedMolecule(mol_3d, params) != 0:
+            st.warning("3D 构象嵌入失败")
+            img = Draw.MolToImage(mol, size=(300,300))
+            st.image(img, caption="2D 结构")
+            return
         AllChem.MMFFOptimizeMolecule(mol_3d)
         block = Chem.MolToMolBlock(mol_3d)
         view = py3Dmol.view(width=width, height=height)
@@ -150,8 +165,10 @@ def display_molecule_3d(smiles, height=400, width=400, style='stick'):
             view.setStyle({'line': {}})
         view.zoomTo()
         showmol(view, height=height, width=width)
-    else:
-        st.warning("3D 构象生成失败")
+    except Exception as e:
+        st.warning(f"3D 显示失败: {str(e)[:100]}")
+        img = Draw.MolToImage(mol, size=(300,300))
+        st.image(img, caption="2D 结构")
 
 def search_pubmed(keyword, retmax=5):
     """搜索 PubMed 文献"""
@@ -234,23 +251,8 @@ def main():
 
     # 文件读取模块
     st.sidebar.subheader("数据加载")
-    use_example = st.sidebar.checkbox("使用示例数据（无真实文件时）", value=False)
     if st.sidebar.button("读取 BindingDB 和 PDB 文件"):
-        if use_example:
-            # 生成示例数据
-            np.random.seed(42)
-            n_samples = 500
-            smiles_list = ["CC(=O)NC1=CC=CC=C1", "C1=CC=CC=C1", "CC(C)CC1=CC=C(C=C1)C(C)C(=O)O"] * (n_samples // 3 + 1)
-            smiles_list = smiles_list[:n_samples]
-            ic50 = np.random.uniform(10, 10000, n_samples)
-            df = pd.DataFrame({"smiles": smiles_list, "ic50": ic50})
-            # 使用当前阈值标记标签
-            df['label'] = (df['ic50'] <= st.session_state.ic50_threshold).astype(int)
-            st.session_state.raw_df = df
-            st.session_state.data_loaded = True
-            st.success(f"示例数据生成成功！共 {len(df)} 个分子，活性分子 {df['label'].sum()} 个（IC50 ≤ {st.session_state.ic50_threshold} nM）。")
-            st.session_state.active_seeds = df[df['label']==1]['smiles'].tolist()
-        elif os.path.exists(TSV_PATH) and os.path.exists(PDB_PATH):
+        if os.path.exists(TSV_PATH) and os.path.exists(PDB_PATH):
             try:
                 df = pd.read_csv(TSV_PATH, sep='\t', usecols=['Ligand SMILES', 'IC50 (nM)'], on_bad_lines='skip')
                 df.columns = ['smiles', 'ic50']
@@ -265,7 +267,7 @@ def main():
             except Exception as e:
                 st.error(f"数据加载失败: {e}")
         else:
-            st.error(f"文件缺失：请确保 {TSV_PATH} 和 {PDB_PATH} 存在，或勾选「使用示例数据」")
+            st.error(f"文件缺失：请确保 {TSV_PATH} 和 {PDB_PATH} 存在")
 
     # 侧边栏导航
     if not st.session_state.data_loaded:

@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+joblib
+matplotlib
+seaborn
+scikit-learn
+rdkit
+shap
+py3Dmol
+stmol
+openai
+biopython

@@ -24,12 +24,6 @@ from openai import OpenAI
 from Bio import Entrez
 import gc
 
-try:
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS', 'WenQuanYi Micro Hei']
-    plt.rcParams['axes.unicode_minus'] = False
-except:
-    pass
-
 # 页面配置
 st.set_page_config(page_title="PCSK9 药物设计全流程平台", layout="wide")
 
@@ -209,7 +203,7 @@ def plot_learning_curve(estimator, X, y, cv=5, scoring='roc_auc'):
     ax.legend(loc="best")
     return fig
 
-# 内置药物库
+# 内置药物库 (中文名称)
 def get_drug_library():
     """返回扩展的药物库（包含常见他汀类、贝特类、PCSK9相关分子等）"""
     return pd.DataFrame([
@@ -331,12 +325,12 @@ def main():
         col2.metric(f"活性分子 (IC50 ≤ {st.session_state.ic50_threshold} nM)", df['label'].sum())
         col3.metric("非活性分子", len(df) - df['label'].sum())
         
-        # 活性分布图
+        # 活性分布图 (使用英文标签)
         fig, ax = plt.subplots()
         sns.histplot(df['ic50'], bins=50, log_scale=True, ax=ax)
-        ax.axvline(x=st.session_state.ic50_threshold, color='r', linestyle='--', label=f'阈值 = {st.session_state.ic50_threshold} nM')
+        ax.axvline(x=st.session_state.ic50_threshold, color='r', linestyle='--', label=f'Threshold = {st.session_state.ic50_threshold} nM')
         ax.set_xlabel("IC50 (nM, log scale)")
-        ax.set_title("IC50 分布")
+        ax.set_title("IC50 Distribution")
         ax.legend()
         st.pyplot(fig)
         
@@ -423,7 +417,7 @@ def main():
                 st.session_state.fp_params = {'nBits': fp_nbits, 'radius': fp_radius}
                 joblib.dump(best_rf, os.path.join(MODEL_DIR, "qsar_model.pkl"))
                 
-                # 绘制 ROC 曲线和 PR 曲线
+                # 绘制 ROC 曲线和 PR 曲线 (英文标签)
                 fpr, tpr, _ = roc_curve(y_test, y_proba)
                 precision, recall, _ = precision_recall_curve(y_test, y_proba)
                 fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(12,5))
@@ -440,7 +434,7 @@ def main():
                 ax2.legend()
                 st.pyplot(fig1)
                 
-                # 混淆矩阵
+                # 混淆矩阵 (英文标签)
                 cm = confusion_matrix(y_test, y_pred)
                 fig2, ax = plt.subplots()
                 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
@@ -569,11 +563,20 @@ def main():
                     
                     df_res = pd.DataFrame(results).sort_values("综合得分", ascending=False)
                     st.dataframe(df_res)
+                    # 交互性增强：让用户选择要显示3D的分子
                     if not df_res.empty:
-                        st.subheader("Top 分子对接模拟图")
-                        top_smi = df_res.iloc[0]["SMILES"]
-                        display_molecule_3d(top_smi, height=400, width=400)
-                        st.caption(f"对接分数: {df_res.iloc[0]['对接分数(kcal/mol)']} kcal/mol (越低越稳定)")
+                        st.subheader("分子3D展示（可交互）")
+                        # 创建下拉选择框，显示 SMILES 和综合得分
+                        selected_smi = st.selectbox(
+                            "选择要查看3D结构的分子",
+                            options=df_res["SMILES"].tolist(),
+                            format_func=lambda x: f"{x[:50]}... (Score: {df_res[df_res['SMILES']==x]['综合得分'].values[0]})"
+                        )
+                        if selected_smi:
+                            display_molecule_3d(selected_smi, height=400, width=400)
+                            # 显示该分子的对接分数
+                            docking_val = df_res[df_res['SMILES']==selected_smi]['对接分数(kcal/mol)'].values[0]
+                            st.caption(f"对接分数: {docking_val} kcal/mol (越低越稳定)")
 
     # 5. 药物重定位
     elif menu == "药物重定位":
@@ -590,12 +593,12 @@ def main():
                     results.append({"药物名称": row["name"], "预测活性概率": round(prob, 4)})
                 df_drug = pd.DataFrame(results).sort_values("预测活性概率", ascending=False)
                 st.dataframe(df_drug)
-                # 绘制条形图
+                # 绘制条形图 (英文标签)
                 fig, ax = plt.subplots(figsize=(8,6))
                 sns.barplot(data=df_drug, x="预测活性概率", y="药物名称", ax=ax)
                 ax.set_xlim(0,1)
-                ax.set_xlabel("预测 PCSK9 活性概率")
-                ax.set_title("药物重定位潜力预测")
+                ax.set_xlabel("Predicted PCSK9 Activity Probability")
+                ax.set_title("Drug Repurposing Potential Prediction")
                 st.pyplot(fig)
 
     # 6. 耐药性分析
@@ -621,18 +624,18 @@ def main():
                         drift_probs.append(new_prob)
                     fig, ax = plt.subplots()
                     ax.plot(drift_probs, marker='o', linestyle='-', alpha=0.7)
-                    ax.axhline(y=original_prob, color='r', linestyle='--', label='原始概率')
-                    ax.set_xlabel("扰动次数")
-                    ax.set_ylabel("预测活性概率")
-                    ax.set_title(f"耐药性压力测试 ({noise_level*100}% 指纹位点突变)")
+                    ax.axhline(y=original_prob, color='r', linestyle='--', label='Original probability')
+                    ax.set_xlabel("Perturbation index")
+                    ax.set_ylabel("Predicted activity probability")
+                    ax.set_title(f"Resistance stress test ({noise_level*100}% fingerprint mutation)")
                     ax.legend()
                     st.pyplot(fig)
                     drift_std = np.std(drift_probs)
-                    st.write(f"活性概率标准差: {drift_std:.4f}")
+                    st.write(f"Activity probability std: {drift_std:.4f}")
                     if drift_std < 0.05:
-                        st.success("低漂移，分子耐药潜力较好")
+                        st.success("Low drift, good resistance potential")
                     else:
-                        st.warning("高漂移，易产生耐药性")
+                        st.warning("High drift, prone to drug resistance")
 
     # 7. 知识提取
     elif menu == "知识提取":

@@ -24,6 +24,12 @@ from openai import OpenAI
 from Bio import Entrez
 import gc
 
+try:
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS', 'WenQuanYi Micro Hei']
+    plt.rcParams['axes.unicode_minus'] = False
+except:
+    pass
+
 # 页面配置
 st.set_page_config(page_title="PCSK9 药物设计全流程平台", layout="wide")
 
@@ -141,17 +147,15 @@ def display_molecule_3d(smiles, height=400, width=400, style='stick'):
     except:
         st.warning("分子消毒失败，可能含有不合理价键，3D 结构无法生成")
         img = Draw.MolToImage(mol, size=(300,300))
-        st.image(img, caption="2D 结构")
+        st.image(img, caption="2D structure")
         return
     mol_3d = Chem.AddHs(mol)
-    params = AllChem.ETKDG()
-    params.maxAttempts = 500
-    params.randomSeed = 42
     try:
-        if AllChem.EmbedMolecule(mol_3d, params) != 0:
+        # 使用默认参数，避免属性错误
+        if AllChem.EmbedMolecule(mol_3d, AllChem.ETKDG()) != 0:
             st.warning("3D 构象嵌入失败")
             img = Draw.MolToImage(mol, size=(300,300))
-            st.image(img, caption="2D 结构")
+            st.image(img, caption="2D structure")
             return
         AllChem.MMFFOptimizeMolecule(mol_3d)
         block = Chem.MolToMolBlock(mol_3d)
@@ -168,7 +172,7 @@ def display_molecule_3d(smiles, height=400, width=400, style='stick'):
     except Exception as e:
         st.warning(f"3D 显示失败: {str(e)[:100]}")
         img = Draw.MolToImage(mol, size=(300,300))
-        st.image(img, caption="2D 结构")
+        st.image(img, caption="2D structure")
 
 def search_pubmed(keyword, retmax=5):
     """搜索 PubMed 文献"""

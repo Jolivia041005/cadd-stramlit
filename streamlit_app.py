@@ -571,6 +571,7 @@ def main():
                 sns.barplot(data=df_drug, x="预测活性概率", y="药物名称", ax=ax)
                 ax.set_xlim(0,1)
                 ax.set_xlabel("Predicted PCSK9 Activity Probability")
+                ax.set_ylabel("Drug Name")
                 ax.set_title("Drug Repurposing Potential Prediction")
                 st.pyplot(fig)
 

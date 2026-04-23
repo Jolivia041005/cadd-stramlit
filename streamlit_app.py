@@ -13,7 +13,7 @@ import seaborn as sns
 from sklearn.manifold import TSNE
 from sklearn.model_selection import learning_curve
 from rdkit import Chem
-from rdkit.Chem import AllChem, Descriptors, Draw, rdMolDescriptors, Lipinski
+from rdkit.Chem import AllChem, Descriptors, Draw, rdMolDescriptors, Lipinski, QED
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import roc_auc_score, accuracy_score, confusion_matrix, roc_curve, precision_recall_curve
@@ -67,36 +67,15 @@ def calculate_admet_properties(smiles):
     }
 
 def calculate_docking_score(smiles):
-    """
-    替代对接分数：基于类药性规则的打分函数（越低越好，范围 0-100）
-    考虑了分子量、LogP、可旋转键数、氢键供受体等
-    """
+    """模拟分子对接分数（使用 RDKit QED 分数，范围 0-1，越高越好）"""
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
-            return 100.0
-        mw = Descriptors.MolWt(mol)
-        logp = Descriptors.MolLogP(mol)
-        rot_bonds = Lipinski.NumRotatableBonds(mol)
-        hbd = Lipinski.NumHDonors(mol)
-        hba = Lipinski.NumHAcceptors(mol)
-        # 理想范围: MW < 500, LogP < 5, RotBonds < 10, HBD <= 5, HBA <= 10
-        score = 0.0
-        if mw > 500:
-            score += (mw - 500) / 100
-        if logp > 5:
-            score += (logp - 5) / 2
-        if rot_bonds > 10:
-            score += (rot_bonds - 10) / 5
-        if hbd > 5:
-            score += (hbd - 5) / 2
-        if hba > 10:
-            score += (hba - 10) / 3
-        # 归一化到 0-100，并确保最低为0
-        final_score = min(100, max(0, score * 10))
-        return round(final_score, 2)
+            return 0.0
+        qed_score = QED.qed(mol)
+        return round(qed_score, 4)
     except:
-        return 100.0
+        return 0.0
 
 def generate_brics_molecules(seeds, n_gen=20, min_frag_size=3):
     """基于 BRICS 片段重组生成新分子"""
@@ -213,7 +192,7 @@ def plot_learning_curve(estimator, X, y, cv=5, scoring='roc_auc'):
     ax.legend(loc="best")
     return fig
 
-# 内置药物库 (中文名称)
+# 内置药物库
 def get_drug_library():
     """返回扩展的药物库（包含常见他汀类、贝特类、PCSK9相关分子等）"""
     return pd.DataFrame([
@@ -335,12 +314,12 @@ def main():
         col2.metric(f"活性分子 (IC50 ≤ {st.session_state.ic50_threshold} nM)", df['label'].sum())
         col3.metric("非活性分子", len(df) - df['label'].sum())
         
-        # 活性分布图 (使用英文标签)
+        # 活性分布图
         fig, ax = plt.subplots()
         sns.histplot(df['ic50'], bins=50, log_scale=True, ax=ax)
-        ax.axvline(x=st.session_state.ic50_threshold, color='r', linestyle='--', label=f'Threshold = {st.session_state.ic50_threshold} nM')
+        ax.axvline(x=st.session_state.ic50_threshold, color='r', linestyle='--', label=f'阈值 = {st.session_state.ic50_threshold} nM')
         ax.set_xlabel("IC50 (nM, log scale)")
-        ax.set_title("IC50 Distribution")
+        ax.set_title("IC50 分布")
         ax.legend()
         st.pyplot(fig)
         
@@ -427,7 +406,7 @@ def main():
                 st.session_state.fp_params = {'nBits': fp_nbits, 'radius': fp_radius}
                 joblib.dump(best_rf, os.path.join(MODEL_DIR, "qsar_model.pkl"))
                 
-                # 绘制 ROC 曲线和 PR 曲线 (英文标签)
+                # 绘制 ROC 曲线和 PR 曲线
                 fpr, tpr, _ = roc_curve(y_test, y_proba)
                 precision, recall, _ = precision_recall_curve(y_test, y_proba)
                 fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(12,5))
@@ -444,7 +423,7 @@ def main():
                 ax2.legend()
                 st.pyplot(fig1)
                 
-                # 混淆矩阵 (英文标签)
+                # 混淆矩阵
                 cm = confusion_matrix(y_test, y_pred)
                 fig2, ax = plt.subplots()
                 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
@@ -526,7 +505,7 @@ def main():
 
     # 4. 虚拟筛选 
     elif menu == "虚拟筛选(ADMET+对接)":
-        st.header("4. 虚拟筛选：QSAR + ADMET + 类药性打分")
+        st.header("4. 虚拟筛选：QSAR + ADMET + 对接分数")
         if not st.session_state.generated_mols:
             st.warning("请先在「分子设计」中生成分子")
         else:
@@ -553,14 +532,12 @@ def main():
                         act_prob = predict_activity(st.session_state.model, smi, st.session_state.fp_params)
                         if act_prob < min_act_prob:
                             continue
-                        docking = calculate_docking_score(smi)  # 新的打分函数，范围0-100，越低越好
-                        # 归一化：将 docking 分数转换为 0-1 之间的得分（越低越好转为越高）
-                        docking_norm = 1 - (docking / 100)  # 假设 docking 最大 100
-                        combined_score = weight_qsar * act_prob + weight_docking * docking_norm
+                        docking = calculate_docking_score(smi)  # QED 分数，范围 0-1，越高越好
+                        combined_score = weight_qsar * act_prob + weight_docking * docking
                         results.append({
                             "SMILES": smi,
                             "活性概率": round(act_prob, 4),
-                            "类药性打分": docking,  # 越低表示类药性越好
+                            "对接分数(QED)": docking,
                             "综合得分": round(combined_score, 4),
                             "MW": prop.get("MW"),
                             "LogP": prop.get("LogP"),
@@ -573,8 +550,6 @@ def main():
                     
                     df_res = pd.DataFrame(results).sort_values("综合得分", ascending=False)
                     st.dataframe(df_res)
-                    # 注意：此处不再嵌入 3D 展示，因为已有独立模块
-                    st.info("💡 如需查看分子的 3D 结构，请使用左侧导航栏中的「分子3D展示」功能。")
 
     # 5. 药物重定位
     elif menu == "药物重定位":
@@ -591,12 +566,12 @@ def main():
                     results.append({"药物名称": row["name"], "预测活性概率": round(prob, 4)})
                 df_drug = pd.DataFrame(results).sort_values("预测活性概率", ascending=False)
                 st.dataframe(df_drug)
-                # 绘制条形图 (英文标签)
+                # 绘制条形图
                 fig, ax = plt.subplots(figsize=(8,6))
                 sns.barplot(data=df_drug, x="预测活性概率", y="药物名称", ax=ax)
                 ax.set_xlim(0,1)
-                ax.set_xlabel("Predicted PCSK9 Activity Probability")
-                ax.set_title("Drug Repurposing Potential Prediction")
+                ax.set_xlabel("预测 PCSK9 活性概率")
+                ax.set_title("药物重定位潜力预测")
                 st.pyplot(fig)
 
     # 6. 耐药性分析
@@ -622,18 +597,18 @@ def main():
                         drift_probs.append(new_prob)
                     fig, ax = plt.subplots()
                     ax.plot(drift_probs, marker='o', linestyle='-', alpha=0.7)
-                    ax.axhline(y=original_prob, color='r', linestyle='--', label='Original probability')
-                    ax.set_xlabel("Perturbation index")
-                    ax.set_ylabel("Predicted activity probability")
-                    ax.set_title(f"Resistance stress test ({noise_level*100}% fingerprint mutation)")
+                    ax.axhline(y=original_prob, color='r', linestyle='--', label='原始概率')
+                    ax.set_xlabel("扰动次数")
+                    ax.set_ylabel("预测活性概率")
+                    ax.set_title(f"耐药性压力测试 ({noise_level*100}% 指纹位点突变)")
                     ax.legend()
                     st.pyplot(fig)
                     drift_std = np.std(drift_probs)
-                    st.write(f"Activity probability std: {drift_std:.4f}")
+                    st.write(f"活性概率标准差: {drift_std:.4f}")
                     if drift_std < 0.05:
-                        st.success("Low drift, good resistance potential")
+                        st.success("低漂移，分子耐药潜力较好")
                     else:
-                        st.warning("High drift, prone to drug resistance")
+                        st.warning("高漂移，易产生耐药性")
 
     # 7. 知识提取
     elif menu == "知识提取":

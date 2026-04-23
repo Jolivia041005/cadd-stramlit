@@ -301,7 +301,7 @@ def main():
                                    help="小于等于该值的分子视为活性正样本")
         if new_threshold != st.session_state.ic50_threshold:
             st.session_state.ic50_threshold = new_threshold
-            # 重新标记标签
+
             df['label'] = (df['ic50'] <= new_threshold).astype(int)
             st.session_state.raw_df = df
             st.session_state.active_seeds = df[df['label']==1]['smiles'].tolist()
@@ -317,9 +317,9 @@ def main():
         # 活性分布图
         fig, ax = plt.subplots()
         sns.histplot(df['ic50'], bins=50, log_scale=True, ax=ax)
-        ax.axvline(x=st.session_state.ic50_threshold, color='r', linestyle='--', label=f'阈值 = {st.session_state.ic50_threshold} nM')
+        ax.axvline(x=st.session_state.ic50_threshold, color='r', linestyle='--', label=f'Threshold = {st.session_state.ic50_threshold} nM')
         ax.set_xlabel("IC50 (nM, log scale)")
-        ax.set_title("IC50 分布")
+        ax.set_title("IC50 Distribution")
         ax.legend()
         st.pyplot(fig)
         
@@ -570,8 +570,8 @@ def main():
                 fig, ax = plt.subplots(figsize=(8,6))
                 sns.barplot(data=df_drug, x="预测活性概率", y="药物名称", ax=ax)
                 ax.set_xlim(0,1)
-                ax.set_xlabel("预测 PCSK9 活性概率")
-                ax.set_title("药物重定位潜力预测")
+                ax.set_xlabel("Predicted PCSK9 Activity Probability")
+                ax.set_title("Drug Repurposing Potential Prediction")
                 st.pyplot(fig)
 
     # 6. 耐药性分析
@@ -597,10 +597,10 @@ def main():
                         drift_probs.append(new_prob)
                     fig, ax = plt.subplots()
                     ax.plot(drift_probs, marker='o', linestyle='-', alpha=0.7)
-                    ax.axhline(y=original_prob, color='r', linestyle='--', label='原始概率')
-                    ax.set_xlabel("扰动次数")
-                    ax.set_ylabel("预测活性概率")
-                    ax.set_title(f"耐药性压力测试 ({noise_level*100}% 指纹位点突变)")
+                    ax.axhline(y=original_prob, color='r', linestyle='--', label='Original probability')
+                    ax.set_xlabel("Perturbation index")
+                    ax.set_ylabel("Predicted activity probability")
+                    ax.set_title(f"Resistance stress test ({noise_level*100}% fingerprint mutation)")
                     ax.legend()
                     st.pyplot(fig)
                     drift_std = np.std(drift_probs)

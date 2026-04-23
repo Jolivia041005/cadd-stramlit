@@ -67,25 +67,36 @@ def calculate_admet_properties(smiles):
     }
 
 def calculate_docking_score(smiles):
-    """模拟分子对接分数（基于 MMFF94 力场）"""
+    """
+    替代对接分数：基于类药性规则的打分函数（越低越好，范围 0-100）
+    考虑了分子量、LogP、可旋转键数、氢键供受体等
+    """
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
-            return 999.0
-        mol = Chem.AddHs(mol)
-        # 嵌入 3D 构象
-        if AllChem.EmbedMolecule(mol, AllChem.ETKDG()) != 0:
-            return 999.0
-        # 力场优化
-        AllChem.MMFFOptimizeMolecule(mol)
-        mp = AllChem.MMFFGetMoleculeProperties(mol)
-        ff = AllChem.MMFFGetMoleculeForceField(mol, mp)
-        if ff is None:
-            return 999.0
-        energy = ff.CalcEnergy()
-        return round(energy, 2)  # 较低的能量表示更稳定
+            return 100.0
+        mw = Descriptors.MolWt(mol)
+        logp = Descriptors.MolLogP(mol)
+        rot_bonds = Lipinski.NumRotatableBonds(mol)
+        hbd = Lipinski.NumHDonors(mol)
+        hba = Lipinski.NumHAcceptors(mol)
+        # 理想范围: MW < 500, LogP < 5, RotBonds < 10, HBD <= 5, HBA <= 10
+        score = 0.0
+        if mw > 500:
+            score += (mw - 500) / 100
+        if logp > 5:
+            score += (logp - 5) / 2
+        if rot_bonds > 10:
+            score += (rot_bonds - 10) / 5
+        if hbd > 5:
+            score += (hbd - 5) / 2
+        if hba > 10:
+            score += (hba - 10) / 3
+        # 归一化到 0-100，并确保最低为0
+        final_score = min(100, max(0, score * 10))
+        return round(final_score, 2)
     except:
-        return 999.0
+        return 100.0
 
 def generate_brics_molecules(seeds, n_gen=20, min_frag_size=3):
     """基于 BRICS 片段重组生成新分子"""
@@ -145,7 +156,6 @@ def display_molecule_3d(smiles, height=400, width=400, style='stick'):
         return
     mol_3d = Chem.AddHs(mol)
     try:
-        # 使用默认参数，避免属性错误
         if AllChem.EmbedMolecule(mol_3d, AllChem.ETKDG()) != 0:
             st.warning("3D 构象嵌入失败")
             img = Draw.MolToImage(mol, size=(300,300))
@@ -516,7 +526,7 @@ def main():
 
     # 4. 虚拟筛选 
     elif menu == "虚拟筛选(ADMET+对接)":
-        st.header("4. 虚拟筛选：QSAR + ADMET + 对接分数")
+        st.header("4. 虚拟筛选：QSAR + ADMET + 类药性打分")
         if not st.session_state.generated_mols:
             st.warning("请先在「分子设计」中生成分子")
         else:
@@ -543,14 +553,14 @@ def main():
                         act_prob = predict_activity(st.session_state.model, smi, st.session_state.fp_params)
                         if act_prob < min_act_prob:
                             continue
-                        docking = calculate_docking_score(smi)
-                        # 对接分数归一化（使用 sigmoid，较高能量对应低分）
-                        docking_norm = 1 / (1 + np.exp(docking / 5))  # 能量高时得分接近0，能量低时接近1
+                        docking = calculate_docking_score(smi)  # 新的打分函数，范围0-100，越低越好
+                        # 归一化：将 docking 分数转换为 0-1 之间的得分（越低越好转为越高）
+                        docking_norm = 1 - (docking / 100)  # 假设 docking 最大 100
                         combined_score = weight_qsar * act_prob + weight_docking * docking_norm
                         results.append({
                             "SMILES": smi,
                             "活性概率": round(act_prob, 4),
-                            "对接分数(kcal/mol)": docking,
+                            "类药性打分": docking,  # 越低表示类药性越好
                             "综合得分": round(combined_score, 4),
                             "MW": prop.get("MW"),
                             "LogP": prop.get("LogP"),
@@ -563,20 +573,8 @@ def main():
                     
                     df_res = pd.DataFrame(results).sort_values("综合得分", ascending=False)
                     st.dataframe(df_res)
-                    # 交互性增强：让用户选择要显示3D的分子
-                    if not df_res.empty:
-                        st.subheader("分子3D展示（可交互）")
-                        # 创建下拉选择框，显示 SMILES 和综合得分
-                        selected_smi = st.selectbox(
-                            "选择要查看3D结构的分子",
-                            options=df_res["SMILES"].tolist(),
-                            format_func=lambda x: f"{x[:50]}... (Score: {df_res[df_res['SMILES']==x]['综合得分'].values[0]})"
-                        )
-                        if selected_smi:
-                            display_molecule_3d(selected_smi, height=400, width=400)
-                            # 显示该分子的对接分数
-                            docking_val = df_res[df_res['SMILES']==selected_smi]['对接分数(kcal/mol)'].values[0]
-                            st.caption(f"对接分数: {docking_val} kcal/mol (越低越稳定)")
+                    # 注意：此处不再嵌入 3D 展示，因为已有独立模块
+                    st.info("💡 如需查看分子的 3D 结构，请使用左侧导航栏中的「分子3D展示」功能。")
 
     # 5. 药物重定位
     elif menu == "药物重定位":

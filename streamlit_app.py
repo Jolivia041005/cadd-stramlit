@@ -192,7 +192,7 @@ def plot_learning_curve(estimator, X, y, cv=5, scoring='roc_auc'):
     ax.legend(loc="best")
     return fig
 
-# 内置药物库
+# 内置药物库（仅保留包含英文名的条目）
 def get_drug_library():
     """返回扩展的药物库（包含常见他汀类、贝特类、PCSK9相关分子等）"""
     return pd.DataFrame([
@@ -207,12 +207,6 @@ def get_drug_library():
         {"name": "吉非罗齐 (Gemfibrozil)", "smiles": "CC(C)CC1=CC=C(C=C1)OCC(C)(C)C(=O)O"},
         {"name": "苯扎贝特 (Bezafibrate)", "smiles": "CC(C)(C)C(=O)OC1=CC=C(C=C1)C(=O)NC(CC2=CC=CC=C2)C(=O)O"},
         {"name": "氯贝丁酯 (Clofibrate)", "smiles": "CC(C)(C)C(=O)OC1=CC=C(C=C1)C(=O)OC"},
-        {"name": "阿利西尤单抗模拟小分子", "smiles": "CC(C)(C)C1=CC=C(C=C1)C2=CC=CC=C2C(=O)NCCN3CCOCC3"},
-        {"name": "依洛尤单抗模拟小分子", "smiles": "C1CCN(CC1)C2=CC=C(C=C2)C3=CC=CC=C3C(=O)NCCN4CCOCC4"},
-        {"name": "PCSK9 抑制剂模拟 (PF-06446846)", "smiles": "CC(C)(C)NC(=O)C1=CC=C(C=C1)NC(=O)C2=CC=CC=C2C3=CC=CC=C3"},
-        {"name": "小分子抑制剂模拟 (SBC-115076)", "smiles": "CC(C)(C)C1=CC=C(C=C1)C2=CC=CC=C2C(=O)NC3=CC=CC=C3C(=O)O"},
-        {"name": "PCSK9 配体模拟 (化合物 1)", "smiles": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C3=CC=CC=C3"},
-        {"name": "PCSK9 配体模拟 (化合物 2)", "smiles": "CCOC(=O)C1=CC=C(C=C1)C2=CC=CC=C2C(=O)NCCN3CCOCC3"},
     ])
 
 # 主程序
@@ -572,7 +566,7 @@ def main():
                     if match:
                         return match.group(1)
                     else:
-                        return name.split()[0]  # fallback
+                        return name.split()[0]
                 df_drug['英文名称'] = df_drug['药物名称'].apply(extract_english)
                 fig, ax = plt.subplots(figsize=(8,6))
                 sns.barplot(data=df_drug, x="预测活性概率", y="英文名称", ax=ax)

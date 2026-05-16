@@ -252,7 +252,7 @@ def main():
 
     # 侧边栏导航
     if not st.session_state.data_loaded:
-        st.info("请先点击左侧「读取 BindingDB 和 PDB 文件」开始")
+        st.info("请先读取 BindingDB 和 PDB 文件")
         st.stop()
 
     menu = st.sidebar.radio(
